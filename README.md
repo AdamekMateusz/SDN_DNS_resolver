@@ -5,8 +5,8 @@
 The assumption of the project was to construct an application that, using the OpenFlow protocol, will enable decryption of dns addresses.
 The project was made using mininet and ryu-manager. Ryu-manager is an implementation of the OpenFlow protocol in Python.
 ### How Looks our Network
-![alt text](https://github.com/AdamekMateusz/SDN_DNS_resolver.git/blob/master/topology.png?raw=true)
-
+<!-- ![alt text](https://github.com/AdamekMateusz/SDN_DNS_resolver.git/blob/master/topology.png?raw=true) -->
+![My Image](topology.png)
 ### Example of work
 
 
