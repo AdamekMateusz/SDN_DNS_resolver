@@ -5,13 +5,13 @@
 The assumption of the project was to construct an application that, using the OpenFlow protocol, will enable decryption of dns addresses.
 The project was made using mininet and ryu-manager. Ryu-manager is an implementation of the OpenFlow protocol in Python.
 ### How Looks our Network
-![My Image](topology.png)
+![My Image](images/topology.png)
 ### Example of work
 Our dns request from host in mininet
-![My Image](mininet.png)
+![My Image](images/mininet.png)
 
 In this case we have only a few website awaliable like below:
-![My Image](dns.png)
+![My Image](images/dns.png)
 
 This result about which page are avaliable get when send below request:
 ```console
@@ -49,19 +49,19 @@ Console 1(RYU)
 ```console
 ryu-manager dns.py
 ```
-![My Image](start_ryu.png)
+![My Image](images/start_ryu.png)
 
 Console 2(MININET)
 ```console
 sudo python2 net.py --controler=remote,ip=127.0.0.1,port=6653
 ```
-![My Image](start_mininet.png)
+![My Image](images/start_mininet.png)
 
 Console 3
 '''console
 curl localhost:8080/dns
 '''
-![My Image](dns_output.png)
+![My Image](images/dns_output.png)
 
 #### Create DNS Query
 List DNS list
@@ -99,4 +99,4 @@ h2 host polsatnews.pl
 h1 host polsatnews.pl
 
 ```
-![My Image](output_last.png)
+![My Image](images/output_last.png)
