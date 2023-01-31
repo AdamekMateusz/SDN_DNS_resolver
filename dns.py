@@ -139,8 +139,13 @@ class DNSController(app_manager.RyuApp):
         ofp = dp.ofproto
         ofp_parser = msg.datapath.ofproto_parser
         self.logger.info("test wejscia 1.1")
+        print('msg data', msg.data)
         pkt = packet.Packet(msg.data)
+        print("pkt", pkt)
+        print("pkt protocols", pkt.protocols[-1])
         query = DNSRecord.parse(pkt.protocols[-1])
+        
+        print("query",query)
         self.logger.info('DNS Request: {}'.format(query))
 
         # Only answer the 1st request
@@ -155,13 +160,15 @@ class DNSController(app_manager.RyuApp):
                 ip = self.names[name]
                 self.logger.info('DNS Response for {}: {}'.format(name, ip))
                 a = query.reply()
-                # print("CO to jest ", str(query.get_q().get_qname())[:-1])
+                print("CO to jest ", str(query.get_q().get_qname())[:-1])
                 print("Co to jest 2", A(ip))
                 a.add_answer(RR(
                     str(query.get_q().get_qname()),
                     QTYPE.A,
                     rdata=(A(ip))))
                 payload = a.pack()
+                print("Payload type", type(payload))
+                print("payload", payload)
                 # make a pkt eth/ip/upd/payload with src and dst swap from the
                 # original query
                 out_pkt = self._make_response_pkt(pkt, payload)
@@ -171,13 +178,28 @@ class DNSController(app_manager.RyuApp):
 
                 out_pkt.serialize()
                 out_data = out_pkt.data
+                self.logger.info(out_data)
+                print("TYP", type(out_data))
                 out_port = ofp.OFPP_NORMAL
                 print("port")
                 print("port:",out_port)
 
             except KeyError as key:
                 self.logger.info('DNS Response for {} not found'.format(key))
-                out_data = msg.data
+                a = query.reply()
+                a.add_answer(RR(
+                    str(query.get_q().get_qname()),
+                    QTYPE.A,
+                    rdata=(A("127.0.0.1"))))
+                payload = a.pack()
+                print("Payload type", type(payload))
+                print("payload", payload)
+                # make a pkt eth/ip/upd/payload with src and dst swap from the
+                # original query
+                out_pkt = self._make_response_pkt(pkt, payload)
+                out_pkt.serialize()
+                out_data = out_pkt.data
+                # out_data = msg.data
                 out_port = ofp.OFPP_NORMAL
 
             # Send the pkt back to the switch
