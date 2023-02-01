@@ -1,4 +1,4 @@
-# SDN_DNS_resolver
+# dns_resolver_ryu
 #ryu #python3 #dns
 
 ## About Project
