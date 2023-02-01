@@ -19,13 +19,13 @@ RECORD_DNS = "dns.json"
 ############################
 
 class DNSController(app_manager.RyuApp):
+    """
+    Cala klasa jest tworzona wtedy kiedy jest tworzna instacja RyuApp, jest to spowodowan wsasciwoscia tego _CONTEXT
+    """
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    print("before creating")
     _CONTEXTS = {'wsgi': WSGIApplication}
-    print("after creating")
 
     def __init__(self, *args, **kwargs):
-        print("JESTEM super")
         super(DNSController, self).__init__(*args, **kwargs)
 
         wsgi = kwargs['wsgi']
@@ -40,7 +40,6 @@ class DNSController(app_manager.RyuApp):
         dp = ev.datapath
         ofp = dp.ofproto
         ofp_parser = dp.ofproto_parser
-        self.logger.info("wszedlem")
         # Delete old flows
         dp.send_msg(ofp_parser.OFPFlowMod(
             datapath=dp,
@@ -89,9 +88,7 @@ class DNSController(app_manager.RyuApp):
         self.logger.info('Initialized switch: {:016x}'.format(dp.id))
 
         global load_dns
-        if load_dns < 1: 
-            
-            self.logger.info("Load DNS from configuration file")
+        if load_dns < 1:
             bashCommand = "curl localhost:8080/dns"
             process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
             output, error = process.communicate()
@@ -99,7 +96,11 @@ class DNSController(app_manager.RyuApp):
 
     @staticmethod
     def _make_response_pkt(request, payload):
-        print("wszedlem 2")
+        """
+        Ta funkcja jest opowiedzialna za skonstruowanie wiadomosci powrotnej, na zapytanie DNS'owe
+        Czyli jest tutaj wykonywana zamiana portów jak i addresów IP z source na destinity. 
+        Dzieje sie tak poniewaz chcemy zapytanie DNS'owe odeslac tak skad do nas przyszlo
+        """
         response = packet.Packet()
         request_ethernet = request.get_protocol(ethernet.ethernet)
         request_ip = request.get_protocol(ipv4.ipv4)
@@ -133,52 +134,41 @@ class DNSController(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, ev):
-        self.logger.info('DNS Response MOJ')
+        """
+        Do tej funkcji jest przekazywany pakiet jesli zostanie wychwycone ze jest to pakiet DNS'owy
+        Nastepnie jest ten pakiet parsowany i jestli wystepuje taka wartos pozwalajaca rozszyfrowac 
+        To zostaje zwracana wartsc IP z bazy dla tego zapytania. Jesli nie to sa dwie opcje
+        w zależnosci ktora jest zakomentowana, domyslenie zwroci addres loopback 127.0.0.1 jesli 
+        nie zostanie znalezione.
+        """
         msg = ev.msg
         dp = msg.datapath
         ofp = dp.ofproto
         ofp_parser = msg.datapath.ofproto_parser
-        self.logger.info("test wejscia 1.1")
         pkt = packet.Packet(msg.data)
         query = DNSRecord.parse(pkt.protocols[-1])
-        print
-        self.logger.info('DNS Request: {}'.format(query))
+        # self.logger.info('DNS Request: {}'.format(query))
 
         # Only answer the 1st request
-        self.logger.info("test wejscia 1")
         if query.questions:
+            #wykonujemy zapytanie o dana domene
             name = str(query.questions[0].get_qname())
-            print(type(name))
-            print(name)
             name = name[:-1]
-            # self.logger.info("name: ", name)
             try:
-                ip = self.names[name]
+                ip = self.names[name]   # tutaj jezeli czegos takiego nie znajduje to jest podnoszony exception
                 self.logger.info('DNS Response for {}: {}'.format(name, ip))
-                a = query.reply()
-                print("CO to jest ", str(query.get_q().get_qname())[:-1])
-                print("Co to jest 2", A(ip))
+                a = query.reply()   # jezeli znalazlo to jest twozona odpowiedz.
                 a.add_answer(RR(
                     str(query.get_q().get_qname()),
                     QTYPE.A,
                     rdata=(A(ip))))
                 payload = a.pack()
-                print("Payload type", type(payload))
-                print("payload", payload)
                 # make a pkt eth/ip/upd/payload with src and dst swap from the
                 # original query
                 out_pkt = self._make_response_pkt(pkt, payload)
-                
-                self.logger.info("MOj apkiet")
-                self.logger.info(out_pkt)
-
                 out_pkt.serialize()
                 out_data = out_pkt.data
-                self.logger.info(out_data)
-                print("TYP", type(out_data))
                 out_port = ofp.OFPP_NORMAL
-                print("port")
-                print("port:",out_port)
 
             except KeyError as key:
                 self.logger.info('DNS Response for {} not found'.format(key))
@@ -208,17 +198,12 @@ class DNSController(app_manager.RyuApp):
 class RestApi(ControllerBase):
 
     def __init__(self, req, link, data, **config):
-        print("req ", req, " END")
-        print("link ", link, " END")
-        print("data ", data, " END")
-        print(config, " END")
         super(RestApi, self).__init__(req, link, data, **config)
         self.dns = data[dns_controller_instance_name]
         self.filename = RECORD_DNS
         global load_dns
         if load_dns < 1:
             self.read_dns_record_from_file()
-
 
     def read_dns_record_from_file(self):
         print('Load DNS from file') 
@@ -265,7 +250,6 @@ class RestApi(ControllerBase):
         else:
             raise Response(status=404)
 
-
     def delete_if_name_compare(self, new_entry:dict):
         name = new_entry["name"]
         if name in self.dns.names:
@@ -275,7 +259,6 @@ class RestApi(ControllerBase):
             
         else:
             raise Response(status=404)
-
 
     def delete_if_both_compare(self, new_entry:dict):
         name = new_entry["name"]
@@ -287,10 +270,8 @@ class RestApi(ControllerBase):
         else:
             raise Response(status=404)
 
-
     @route('simpleswitch', '/dns', methods=['DELETE'])
     def delete_dns_table(self, req, **kwargs):
-
         try:
             new_entry = req.json
             keys = list(new_entry.keys())
@@ -310,7 +291,6 @@ class RestApi(ControllerBase):
 
     @route('simpleswitch', '/dns', methods=['PUT'])
     def update_dns_table(self, req, **kwargs):
-
         try:
             new_entry = req.json
             name = new_entry['name']
@@ -329,4 +309,3 @@ class RestApi(ControllerBase):
         else:
             raise Response(status=404)
         return Response(body=body+"\n")
-
