@@ -10,13 +10,13 @@ from ryu.lib.packet import packet, ethernet, ipv4, udp
 from dnslib import DNSRecord, RR, QTYPE, A
 import subprocess
 
-###
-### Configuation Section
+############################
+### Configuation Section ###
 dns_controller_instance_name = 'dns_controller_api'
 DNS_PORT = 53
 load_dns = 0
 RECORD_DNS = "dns.json"
-###
+############################
 
 class DNSController(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -139,13 +139,9 @@ class DNSController(app_manager.RyuApp):
         ofp = dp.ofproto
         ofp_parser = msg.datapath.ofproto_parser
         self.logger.info("test wejscia 1.1")
-        print('msg data', msg.data)
         pkt = packet.Packet(msg.data)
-        print("pkt", pkt)
-        print("pkt protocols", pkt.protocols[-1])
         query = DNSRecord.parse(pkt.protocols[-1])
-        
-        print("query",query)
+        print
         self.logger.info('DNS Request: {}'.format(query))
 
         # Only answer the 1st request
@@ -186,19 +182,17 @@ class DNSController(app_manager.RyuApp):
 
             except KeyError as key:
                 self.logger.info('DNS Response for {} not found'.format(key))
+
                 a = query.reply()
                 a.add_answer(RR(
                     str(query.get_q().get_qname()),
                     QTYPE.A,
                     rdata=(A("127.0.0.1"))))
                 payload = a.pack()
-                print("Payload type", type(payload))
-                print("payload", payload)
-                # make a pkt eth/ip/upd/payload with src and dst swap from the
-                # original query
                 out_pkt = self._make_response_pkt(pkt, payload)
                 out_pkt.serialize()
                 out_data = out_pkt.data
+
                 # out_data = msg.data
                 out_port = ofp.OFPP_NORMAL
 
@@ -220,27 +214,17 @@ class RestApi(ControllerBase):
         print(config, " END")
         super(RestApi, self).__init__(req, link, data, **config)
         self.dns = data[dns_controller_instance_name]
-        print("TO TUTAJ")
-        print(self.dns)
-        print(type(self.dns))
         self.filename = RECORD_DNS
-        print("dns z pliku")
         global load_dns
         if load_dns < 1:
-            print("wszedlem do")
             self.read_dns_record_from_file()
-        else:
-            print("nie wszedlem do pliku")    
-        print("poza plikiem")
 
 
-    def read_dns_record_from_file(self):  
+    def read_dns_record_from_file(self):
+        print('Load DNS from file') 
         file = open(self.filename)
         dns_records = json.load(file)
-        print(dns_records)
         for record in dns_records:
-            print(record)
-            print("TYPE", type(record))
             self.add_dns_table(req=record)
 
     @route('simpleswitch', path='/dns', methods=['GET'])
@@ -249,119 +233,100 @@ class RestApi(ControllerBase):
         body = json.dumps(self.dns.names)
         # return Response(content_type='application/json;charset=UTF-8',
         #                 body=body)
-        return Response(body=body)
+        return Response(body=body+"\n")
 
     @route('simpleswitch', '/dns', methods=['POST'])
     def add_dns_table(self, req, **kwargs):
-
         try:
-            print(req)
-            print(type(req))
             if isinstance(req, Request):
                 new_entry = req.json
-                print(new_entry, "NEW ENTRY")
             else:
                 new_entry = req
-            print(new_entry)
             name = new_entry['name']
             ip = new_entry['ip']
         except ValueError:
             raise Response(status=400)
 
         try:
-            print("To tutja")
-            # print(self.dns.names)
-            # print(self.dns.names[name])
-            print(ip)
             self.dns.names[name] = ip
-            body = json.dumps(self.dns.names)
-            print("body")
-            print(body)
-            # body = json.dumps({"slon":"zyrafa"})
-            # print(body)
-            print("tutaj powinienem byc")
-            # return Response(content_typWWe='application/json;charset=UTF-8',
-            #                 body=body)
-            # body = json.dumps({"slon":"zyrafa"})
+            body = json.dumps(self.dns.names) + "\n"
             return Response(body=body)
         except Exception:
-            print("tutaj jestem zwsze")
             return Response(status=500)
+    
+    def delete_if_ip_compare(self, new_entry:dict):
+        ip = new_entry["ip"]
+        if ip in self.dns.names.values():
+            for key in list(self.dns.names.keys()):
+                if self.dns.names[key] == ip:
+                    self.dns.names.pop(key)
+            body = json.dumps(self.dns.names)
+            return body + "\n"
+        else:
+            raise Response(status=404)
+
+
+    def delete_if_name_compare(self, new_entry:dict):
+        name = new_entry["name"]
+        if name in self.dns.names:
+            self.dns.names.pop(name)
+            body = json.dumps(self.dns.names)
+            return body + "\n"
+            
+        else:
+            raise Response(status=404)
+
+
+    def delete_if_both_compare(self, new_entry:dict):
+        name = new_entry["name"]
+        ip = new_entry["ip"]
+        if name in self.dns.names and self.dns.names[name] == ip:
+            self.dns.names.pop(name)
+            body = json.dumps(self.dns.names)
+            return body + "\n"
+        else:
+            raise Response(status=404)
+
 
     @route('simpleswitch', '/dns', methods=['DELETE'])
     def delete_dns_table(self, req, **kwargs):
 
         try:
-            print(req)
-            print(type(req))
             new_entry = req.json
-            print(new_entry)
-            name = new_entry['name']
-            ip = new_entry['ip']
-            to_delete = {name: ip}
-            print("JESTEM W DELETE")
+            keys = list(new_entry.keys())
+            if "name" in keys and "ip" in keys:
+                body = self.delete_if_both_compare(new_entry)
+                return Response(body=body)
+            elif "name" in keys:
+                body = self.delete_if_name_compare(new_entry)
+                return Response(body=body)
+            elif "ip" in keys:
+                body = self.delete_if_ip_compare(new_entry)
+                return Response(body=body)
+            else:
+                raise ValueError
         except ValueError:
             raise Response(status=400)
-
-        try:
-            print("jeste w try delete")
-            # if to_delete.viewitems() <= self.dns.names.viewitems():
-            self.dns.names.pop(name)
-            
-            print("To tutja")
-            # print(self.dns.names)
-            # print(self.dns.names[name])
-            print(ip)
-            # self.dns.names[name] = ip
-            body = json.dumps(self.dns.names)
-            print("body")
-            print(body)
-            # body = json.dumps({"slon":"zyrafa"})
-            # print(body)
-            print("tutaj powinienem byc")
-            # return Response(content_typWWe='application/json;charset=UTF-8',
-            #                 body=body)
-            # body = json.dumps({"slon":"zyrafa"})
-            return Response(body=body)
-        except Exception:
-            print("tutaj jestem zwsze DELTE")
-            return Response(status=500)
 
     @route('simpleswitch', '/dns', methods=['PUT'])
     def update_dns_table(self, req, **kwargs):
 
         try:
-            print(req)
-            print(type(req))
             new_entry = req.json
-            print(new_entry)
             name = new_entry['name']
             ip = new_entry['ip']
-            # to_delete = {name: ip}
-            print("JESTEM W PUT")
         except ValueError:
             raise Response(status=400)
 
-        try:
-            print("jeste w try put")
-            # if to_delete.viewitems() <= self.dns.names.viewitems():
-            # self.dns.names.pop(name)
+        if name in self.dns.names:
             self.dns.names[name] = ip
-            print("To tutja")
-            # print(self.dns.names)
-            # print(self.dns.names[name])
-            print(ip)
-            # self.dns.names[name] = ip
             body = json.dumps(self.dns.names)
-            print("body")
-            print(body)
-            # body = json.dumps({"slon":"zyrafa"})
-            # print(body)
-            print("tutaj powinienem byc")
-            # return Response(content_typWWe='application/json;charset=UTF-8',
-            #                 body=body)
-            # body = json.dumps({"slon":"zyrafa"})
-            return Response(body=body)
-        except Exception:
-            print("tutaj jestem zwsze PUT")
-            return Response(status=500)
+        elif ip in list(self.dns.names.values()): 
+            for key in list(self.dns.names.keys()):
+                if self.dns.names[key] == ip:
+                    self.dns.names[name] = self.dns.names.pop(key)
+            body = json.dumps(self.dns.names)
+        else:
+            raise Response(status=404)
+        return Response(body=body+"\n")
+
